@@ -3,5 +3,8 @@
 .bsp
 spark-analysis/src/main/resources/gpp.csv
 
+spark-analysis/target/
+spark-analysis/project/target/
+
 *.class
 *.log
