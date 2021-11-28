@@ -1,6 +1,7 @@
 # project ignores
 .idea
 .bsp
+spark-analysis/src/main/resources/gpp.csv
 
 *.class
 *.log
