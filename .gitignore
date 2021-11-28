@@ -1,2 +1,5 @@
+# project ignores
+.idea
+
 *.class
 *.log
