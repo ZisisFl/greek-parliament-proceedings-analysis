@@ -19,7 +19,7 @@ class Test extends AnyFlatSpec {
   "dataframe rows" should "be printed" in {
     val df = DataHandler.createDataFrame(spark)
 
-    val test = DataHandler.processSpeech(df)
+    val test = DataHandler.processSpeechText(df)
     test.show()
   }
 
@@ -34,11 +34,8 @@ class Test extends AnyFlatSpec {
     val text =
       """ Από τα Κόμματα θα τις κάνουν, φυσικά, αλλά θα πρέπει να είναι ένας αριθμός συναδέλφων,
         | οι οποίοι θα λάβουν γνώση. Test English text here. Σχεδόν θα πρέπει να είναι όλοι, όπως αντιλαμβάνεσθε.
-        | Γι` αυτό εφιστώ την προσοχή του Προεδρείου, ούτως ώστε η διανομή να γίνει το συντομότερο δυνατόν.""".stripMargin.toLowerCase()
+        | Γι` αυτό εφιστώ την προσοχή του Προεδρείου, ούτως ώστε η διανομή να γίνει το συντομότερο δυνατόν.""".stripMargin
 
-    //println(TextProcessing.removeNonGreekCharacters(text))
-    //println(TextProcessing.removeNonCharacters(text))
-    //println(TextProcessing.removeStopWords(text))
-    println(TextProcessing.removeIntonation(text.toLowerCase()))
+    println(TextProcessing.textProcessingPipeline(text))
   }
 }

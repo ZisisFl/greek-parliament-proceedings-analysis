@@ -1,9 +1,13 @@
 package auth.dws.bigdata.common
 
 object TextProcessing {
+  def conditionWhitespaces(input_text: String): String ={
+    input_text.trim.replaceAll(" +", " ")
+  }
+
   def removeStopWords(input_text: String): String ={
     val stop_words = StopWords.loadStopWords
-    input_text.split(" ").filterNot(token => stop_words.contains(token)).mkString(" ").trim
+    input_text.split(" ").filterNot(token => stop_words.contains(token)).mkString(" ")
   }
 
   def removeNonGreekCharacters(input_text: String): String ={
@@ -12,10 +16,6 @@ object TextProcessing {
 
   def removeNonCharacters(input_text: String): String ={
     input_text.replaceAll("[^a-zA-ZΑ-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
-  }
-
-  def normalizeApostrofos(input_text: String): String ={
-    input_text
   }
 
   def removeIntonation(input_text: String): String = {
@@ -39,11 +39,12 @@ object TextProcessing {
     substitutions.foldLeft(input_text.toLowerCase()) { case (cur, (from, to)) => cur.replaceAll(from, to)}
   }
 
-//  https://stackoverflow.com/questions/42039355/scala-apply-list-of-functions-to-a-object/42040011
-//  val f1 = (input_string: String) => input_string.replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
-//  val f2 = (input_string: String) => input_string.replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
-//  //Function.chain()
-//  val yo = Seq(f1, f2)
-//
-//  val item = yo.reduce((a,b) => a.andThen(b))("το τεστ")
+  def textProcessingPipeline(input_text: String): String = {
+    val lower_text = input_text.toLowerCase()
+    val text_with_removedIntonation = removeIntonation(lower_text)
+    val text_with_removedStopWords = removeStopWords(text_with_removedIntonation)
+    val text_with_removedNonGreekCharacters = removeNonGreekCharacters(text_with_removedStopWords)
+    val text_with_conditionedWhitespaces = conditionWhitespaces(text_with_removedNonGreekCharacters)
+    text_with_conditionedWhitespaces
+  }
 }
