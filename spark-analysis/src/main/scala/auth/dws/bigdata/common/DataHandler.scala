@@ -1,7 +1,7 @@
 package auth.dws.bigdata.common
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws}
+import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws, size}
 import auth.dws.bigdata.common.TextProcessing._
 import org.apache.spark.ml.feature.Tokenizer
 
@@ -27,22 +27,18 @@ object DataHandler {
   }
 
   def processDataFrame(dataFrame: DataFrame): DataFrame = {
-    val countTokens = (speech_text: String) => {
-      speech_text.split(" ").length
-    }
-    val countTokensUdf = udf(countTokens)
     // remove records of speech procedure
-    val processed = dataFrame.filter(column("political_party") =!= "βουλη")
-      .withColumn("tokens_count", countTokensUdf(column("processed_speech")))
-      .filter(column("tokens_count") > 10)
+    val processed_df = dataFrame.filter(column("political_party") =!= "βουλη")
+      // create a column with concatenation of political party and member name to define a different set of members
       .withColumn("member_name_with_party", concat_ws("_", column("member_name"), column("political_party")))
-      //.drop("tokens_count")
 
     val tokenizer = new Tokenizer()
       .setInputCol("processed_speech")
       .setOutputCol("tokens")
 
-    tokenizer.transform(processed)
+    val tokenized_df = tokenizer.transform(processed_df)
+      .withColumn("tokens_count", size(column("tokens")))
+    tokenized_df//.filter(column("tokens_count") > 10)
   }
 
 }
