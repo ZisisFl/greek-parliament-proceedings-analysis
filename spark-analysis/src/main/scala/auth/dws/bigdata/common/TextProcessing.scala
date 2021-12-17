@@ -41,9 +41,9 @@ object TextProcessing {
 
   def textProcessingPipeline(input_text: String): String = {
     val lower_text = input_text.toLowerCase()
-    val text_with_removedIntonation = removeIntonation(lower_text)
-    val text_with_removedStopWords = removeStopWords(text_with_removedIntonation)
-    val text_with_removedNonGreekCharacters = removeNonGreekCharacters(text_with_removedStopWords)
+    val text_with_removedStopWords = removeStopWords(lower_text)
+    val text_with_removedIntonation = removeIntonation(text_with_removedStopWords)
+    val text_with_removedNonGreekCharacters = removeNonGreekCharacters(text_with_removedIntonation)
     val text_with_conditionedWhitespaces = conditionWhitespaces(text_with_removedNonGreekCharacters)
     text_with_conditionedWhitespaces
   }

@@ -38,7 +38,7 @@ object DataHandler {
 
     val tokenized_df = tokenizer.transform(processed_df)
       .withColumn("tokens_count", size(column("tokens")))
-    tokenized_df//.filter(column("tokens_count") > 10)
+    tokenized_df.filter(column("tokens_count") > 10)
   }
 
 }
