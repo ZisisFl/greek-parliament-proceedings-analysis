@@ -11,20 +11,20 @@ class Test extends AnyFlatSpec {
     .getOrCreate()
 
   "dataframe schema" should "be printed" in {
-    val df = DataHandler.createDataFrame(spark)
+    val df = DataHandler.createDataFrame()
 
     df.printSchema()
   }
 
   "dataframe rows" should "be printed" in {
-    val df = DataHandler.createDataFrame(spark)
+    val df = DataHandler.createDataFrame()
 
     val test = DataHandler.processSpeechText(df)
     test.show()
   }
 
   "dataframe " should "be processed" in {
-    val df = DataHandler.createDataFrame(spark)
+    val df = DataHandler.createDataFrame()
 
     val test = DataHandler.processDataFrame(df)
     test.show()

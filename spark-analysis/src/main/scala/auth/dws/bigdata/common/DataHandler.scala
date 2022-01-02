@@ -1,13 +1,15 @@
 package auth.dws.bigdata.common
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws, size}
+import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws}
+import org.apache.spark.sql.functions.monotonically_increasing_id
 import auth.dws.bigdata.common.TextProcessing._
-import org.apache.spark.ml.feature.Tokenizer
 
 object DataHandler {
+  // fetch existing global spark session
+  val spark: SparkSession = SparkSession.builder().getOrCreate()
 
-  def createDataFrame(spark: SparkSession): DataFrame = {
+  def createDataFrame(): DataFrame = {
     val path = "src/main/resources/gpp.csv"
 
     spark.read
@@ -28,17 +30,10 @@ object DataHandler {
 
   def processDataFrame(dataFrame: DataFrame): DataFrame = {
     // remove records of speech procedure
-    val processed_df = dataFrame.filter(column("political_party") =!= "βουλη")
+    dataFrame.filter(column("political_party") =!= "βουλη")
       // create a column with concatenation of political party and member name to define a different set of members
       .withColumn("member_name_with_party", concat_ws("_", column("member_name"), column("political_party")))
-
-    val tokenizer = new Tokenizer()
-      .setInputCol("processed_speech")
-      .setOutputCol("tokens")
-
-    val tokenized_df = tokenizer.transform(processed_df)
-      .withColumn("tokens_count", size(column("tokens")))
-    tokenized_df.filter(column("tokens_count") > 10)
+      // add an unique incremental id
+      .withColumn("id", monotonically_increasing_id)
   }
-
 }

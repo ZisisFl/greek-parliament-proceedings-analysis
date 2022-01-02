@@ -1,11 +1,10 @@
 package auth.dws.bigdata.tasks
 
-import auth.dws.bigdata.common.DataHandler
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.ml.feature.CountVectorizer
-import org.apache.spark.sql.functions.monotonically_increasing_id
-import org.apache.spark.mllib.linalg.Vector
-import org.apache.spark.mllib.clustering.{LDA, OnlineLDAOptimizer}
+import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame, processSpeechText}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.ml.feature.{CountVectorizer, Tokenizer}
+import org.apache.spark.sql.functions.{column, udf}
+import org.apache.spark.ml.clustering.LDA
 
 object Task1 {
 
@@ -13,53 +12,88 @@ object Task1 {
     val spark: SparkSession = SparkSession
       .builder()
       .appName("Proceedings Analysis Task1")
-      .master("local[4]")
+      .master("local[*]")
       .getOrCreate()
 
-    val original_df = DataHandler.createDataFrame(spark)
+    val start_time = System.nanoTime
 
-    val df_with_processed_speech = DataHandler.processSpeechText(original_df)
-    df_with_processed_speech.show()
+    // load original csv as DataFrame
+    val original_df = createDataFrame().sample(0.1)
 
-    val processed_df = DataHandler.processDataFrame(df_with_processed_speech)
-      .withColumn("id", monotonically_increasing_id)
-    processed_df.printSchema()
-    processed_df.show()
+    // process speech column
+    val processed_speech_df = processSpeechText(original_df)
 
-    //https://databricks-prod-cloudfront.cloud.databricks.com/public/4027ec902e239c93eaaa8714f173bcfc/3741049972324885/3783546674231782/4413065072037724/latest.html
+    // process dataframe
+    val processed_df = processDataFrame(processed_speech_df)
+
+    // tokenize speech
+    val tokenizer = new Tokenizer()
+      .setInputCol("processed_speech")
+      .setOutputCol("tokens")
+
+    val tokenized_df = tokenizer.transform(processed_df)
+      //.withColumn("tokens_count", size(column("tokens")))
+      //.where(column("tokens_count") > 10)
+
+    tokenized_df.printSchema()
+    tokenized_df.show()
+    println(tokenized_df.count())
+
+    // create feature vectors with bag of words technique out of speech text
     val vectorizer = new CountVectorizer()
       .setInputCol("tokens")
       .setOutputCol("features")
       .setVocabSize(10000)
       .setMinDF(5)
-      .fit(processed_df)
+      .fit(tokenized_df)
 
-    val countVectors = vectorizer.transform(processed_df).select("id", "features")
+    val countVectors = vectorizer.transform(tokenized_df).select("id", "features")
 
-    import spark.implicits._
-    val lda_countVector = countVectors.map { case Row(id: Long, countVector: Vector) => (id, countVector) }.rdd
-
-    val numTopics = 20
-    // Set LDA params
     val lda = new LDA()
-      .setOptimizer(new OnlineLDAOptimizer().setMiniBatchFraction(0.8))
-      .setK(numTopics)
-      .setMaxIterations(3)
-      .setDocConcentration(-1) // use default values
-      .setTopicConcentration(-1) // use default values
+      .setK(5)
+      .setMaxIter(10)
 
-    val ldaModel = lda.run(lda_countVector)
+    val model = lda.fit(countVectors)
 
-    val topicIndices = ldaModel.describeTopics(maxTermsPerTopic = 5)
+    val ll = model.logLikelihood(countVectors)
+    val lp = model.logPerplexity(countVectors)
+    println(s"The lower bound on the log likelihood of the entire corpus: $ll")
+    println(s"The upper bound on perplexity: $lp")
+
+    // Describe topics.
+    val topicIndices = model.describeTopics(10)
+
+    // Map term indeces to actual terms from vocabulary
     val vocabList = vectorizer.vocabulary
-    val topics = topicIndices.map { case (terms, termWeights) =>
-      terms.map(vocabList(_)).zip(termWeights)
+
+    val index_to_term_mapping = (termIndices: Seq[Int]) => {
+      termIndices.map(vocabList(_))
     }
-    println(s"$numTopics topics:")
-    topics.zipWithIndex.foreach { case (topic, i) =>
-      println(s"TOPIC $i")
-      topic.foreach { case (term, weight) => println(s"$term\t$weight") }
-      println(s"==========")
-    }
+    val term_mapping_udf = udf(index_to_term_mapping)
+
+    // add mapped terms in dataframe
+    val topicsWithTerms = topicIndices.withColumn("terms", term_mapping_udf(column("termIndices")))
+
+    // Collect and print results
+    println("The topics described by their top-weighted terms:")
+    //topicsWithTerms.show(false)
+    topicsWithTerms.collect.foreach(x => {
+      val topic = x.getAs[Int]("topic")
+      val topicTerms = x.getAs[Seq[String]]("terms")
+      val termWeights = x.getAs[Seq[Double]]("termWeights")
+
+      println(s"Topic $topic")
+      println("Terms:")
+      topicTerms.zip(termWeights).foreach({case (term, termWeight) => println(s"$term $termWeight")})
+      println("\n")
+    })
+
+    // Shows the result.
+//    val transformed = model.transform(countVectors)
+//    transformed.show(false)
+
+
+    val duration = (System.nanoTime - start_time) / 1e9d
+    println(s"Execution time was $duration seconds")
   }
 }
