@@ -37,5 +37,5 @@ class Test extends AnyFlatSpec {
         | Γι` αυτό εφιστώ την προσοχή του Προεδρείου, ούτως ώστε η διανομή να γίνει το συντομότερο δυνατόν.""".stripMargin
 
     println(TextProcessing.textProcessingPipeline(text))
-  }
+  };
 }
