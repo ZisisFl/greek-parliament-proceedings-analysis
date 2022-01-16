@@ -1,25 +1,24 @@
 package auth.dws.bigdata.tasks
 
 import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame, processSpeechText}
-import org.apache.spark.ml.feature.{CountVectorizer, IDF, Tokenizer}
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{collect_list, column, concat_ws, flatten, size, udf, year}
-import org.apache.spark.ml.linalg.Vector
 import auth.dws.bigdata.common.{RAKE, RAKEStrategy, StopWords}
+import org.apache.spark.ml.feature.{CountVectorizer, IDF, Tokenizer}
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.functions.{collect_list, column, flatten, udf, year}
 
-object Task3 {
+object Task3RAKE {
 
   def main(args: Array[String]): Unit = {
     val spark: SparkSession = SparkSession
       .builder()
-      .appName("Proceedings Analysis Task1")
+      .appName("Proceedings Analysis Task3 RAKE")
       .master("local[*]")
       .getOrCreate()
 
     val start_time = System.nanoTime
 
     // load original csv as DataFrame
-    val original_df = createDataFrame().sample(0.1)
+    val original_df = createDataFrame().sample(0.01)
 
     // process speech column
     val processed_speech_df = processSpeechText(original_df)
@@ -53,67 +52,53 @@ object Task3 {
     val idfModel = idf.fit(featurized_df)
 
     val complete_df = idfModel.transform(featurized_df)
-    .withColumn("tokens_count", size(column("tokens")))
-    .where(column("tokens_count") > 20)
-//
-//    complete_df.show(false)
-//    complete_df.printSchema()
-//
-//    // extract top-N keywords based on tfidf score from each speech token
-//    val vocabList = vectorizer.vocabulary
-//
-//    // set N
-//    val N = 5
-//    val get_top_keywords = (tfidf: Vector) => {
-//      tfidf.toArray
-//        .zipWithIndex
-//        .filterNot(_._1 ==0)
-//        .sortBy(_._1)
-//        .reverse
-//        .take(N)
-//        .map(_._2)
-//        .map(vocabList(_))
-//    }
-//
-//    // turn function into udf
-//    val get_top_keywords_udf = udf(get_top_keywords)
-//
-//    // add mapped terms in dataframe
-//    val df_with_top_keywords = complete_df.withColumn("topN_keywords", get_top_keywords_udf(column("tfidf")))
-//
-//    df_with_top_keywords.show()
-//    df_with_top_keywords.printSchema()
-//
-//    // aggregate topN_keywords into a single Array year and political party
-//    val grouped_df = df_with_top_keywords.groupBy("political_party", "sitting_year")
-//      .agg(flatten(collect_list("topN_keywords")) as "topN_keywords_grouped")
-//
-//    val token_freq = (tokens: Seq[String]) => {
-//      tokens.groupBy(identity).
-//        mapValues(_.map(_ => 1).sum)
-//        .toArray
-//        .sortBy(_._2)
-//        .reverse
-//    }
-//
-//    val token_freq_udf = udf(token_freq)
-//
-//    val tokens_with_freq = grouped_df.withColumn("topN_keywords_freq", token_freq_udf(column("topN_keywords_grouped")))
-//
-//    tokens_with_freq.printSchema()
-//    tokens_with_freq.where("political_party == 'νεα δημοκρατια'").orderBy(column("sitting_year")).show()
+    //.withColumn("tokens_count", size(column("tokens")))
+    //.where(column("tokens_count") > 20)
 
     val rake_algorithm = new RAKE(StopWords.loadStopWords.toSet, Array(' '), Array('.', ',', '\n', ';'))
     val rake = (input_text: String) => {
       rake_algorithm.toScoredKeywords(input_text, RAKEStrategy.Ratio)
         .toArray
-        .sortBy(_._2)
-        .reverse
+        .sortWith(_._2 > _._2)
         .map(x => (x._1.mkString(" "), x._2))
+        .toSeq
     }
     val rake_udf = udf(rake)
 
-    complete_df.withColumn("rake_terms", rake_udf(column("speech"))).show(false)
+    val speeches_with_rake_df = complete_df.withColumn("rake_terms", rake_udf(column("speech")))//.show(false)
+
+    // aggregate topN_keywords into a single Array per year and political party
+    val df_per_political_party = speeches_with_rake_df.groupBy("political_party", "sitting_year")
+      .agg(flatten(collect_list("rake_terms")) as "rake_terms_grouped")
+
+    // aggregate topN_keywords into a single Array per year and member
+    val df_per_member = speeches_with_rake_df.groupBy("member_name_with_party", "sitting_year")
+      .agg(flatten(collect_list("rake_terms")) as "rake_terms_grouped")
+
+    val N = 5
+    val get_top_rake_keywords = (terms: Seq[Row]) => {
+      // casting an Array of tuples in udf requires using Seq[Rows]
+      // https://stackoverflow.com/questions/41551410/passing-a-list-of-tuples-as-a-parameter-to-a-spark-udf-in-scala
+      terms.map(x => (x.getAs[String](0), x.getAs[Double](1)))
+        .groupBy(_._1)
+        .mapValues(_.map(_._2).sum)
+        .toArray
+        .sortWith(_._2 > _._2)
+        .take(N)
+        .map(_._1)
+
+    }
+
+    val get_top_rake_keywords_udf = udf(get_top_rake_keywords)
+
+    val df_per_political_party_final = df_per_political_party
+      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_terms_grouped")))
+
+    val df_per_member_final = df_per_member
+      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_terms_grouped")))
+
+    df_per_political_party_final.show(false)
+    df_per_member_final.show(false)
 
     //https://towardsdatascience.com/keyword-extraction-methods-the-overview-35557350f8bb
     //https://nlp.johnsnowlabs.com/api/python/reference/autosummary/sparknlp.annotator.YakeKeywordExtraction.html?highlight=yake
