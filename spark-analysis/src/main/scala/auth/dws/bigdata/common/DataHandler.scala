@@ -3,7 +3,6 @@ package auth.dws.bigdata.common
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws}
 import org.apache.spark.sql.functions.monotonically_increasing_id
-import auth.dws.bigdata.common.TextProcessing._
 
 object DataHandler {
   // fetch existing global spark session
@@ -19,13 +18,26 @@ object DataHandler {
   }
 
   def processSpeechText(dataFrame: DataFrame): DataFrame = {
-    // Create UDF to apply text processing functions to speech column
-    val processSpeechText = (speech_text: String) => {
-      textProcessingPipeline(speech_text)
-    }
-    val processSpeechTextUdf = udf(processSpeechText)
+    // Broadcast set of stop words
+    val stopWords = spark.sparkContext.broadcast(StopWords.loadStopWords.toSet)
 
-    dataFrame.withColumn("processed_speech",  processSpeechTextUdf(column("speech")))
+    // Create UDF to apply text processing functions to speech column
+    val textProcessingPipeline = (input_text: String) => {
+      input_text
+        .toLowerCase()
+        .replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
+        .split("\\s+")
+        .filter(_.length > 3)
+        .filter(!stopWords.value.contains(_))
+        .mkString(" ")
+    }
+
+    val processSpeechTextUdf = udf(textProcessingPipeline)
+
+    dataFrame
+      .withColumn("processed_speech",  processSpeechTextUdf(column("speech")))
+      // exclude speeches that after processing have no tokens left (are empty string "") e.g contained only stop words
+      .filter(column("processed_speech") =!= "")
   }
 
   def processDataFrame(dataFrame: DataFrame): DataFrame = {

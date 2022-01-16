@@ -1,5 +1,6 @@
 package auth.dws.bigdata.common
 
+// Collection of text processing functions
 object TextProcessing {
   def conditionWhitespaces(input_text: String): String = {
     input_text.trim.replaceAll(" +", " ")
@@ -43,6 +44,7 @@ object TextProcessing {
     substitutions.foldLeft(input_text.toLowerCase()) { case (cur, (from, to)) => cur.replaceAll(from, to)}
   }
 
+  // DEPRECATED Using textProcessingSingle in a udf version in DataHandler instead
   def textProcessingPipeline(input_text: String): String = {
     val lower_text = input_text.toLowerCase()
     val text_with_removedStopWords = removeStopWords(lower_text)
@@ -51,5 +53,15 @@ object TextProcessing {
     val text_with_removedShortWords = removeShortWords(text_with_removedNonGreekCharacters)
     val text_with_conditionedWhitespaces = conditionWhitespaces(text_with_removedShortWords)
     text_with_conditionedWhitespaces
+  }
+
+  def textProcessingSingle(input_text: String, stopWords: Set[String]): String = {
+    input_text
+      .toLowerCase()
+      .replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
+      .split("\\s+")
+      .filter(_.length > 3)
+      .filter(!stopWords.contains(_))
+      .mkString(" ")
   }
 }
