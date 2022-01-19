@@ -17,9 +17,16 @@ object DataHandler {
       .withColumn("sitting_date", to_date(column("sitting_date"), "dd/MM/yyyy"))
   }
 
-  def processSpeechText(dataFrame: DataFrame): DataFrame = {
+  def processSpeechText(dataFrame: DataFrame, removeDomainSpecificStopWords: Boolean): DataFrame = {
     // Broadcast set of stop words
-    val stopWords = spark.sparkContext.broadcast(StopWords.loadStopWords.toSet)
+    val stopWords = spark.sparkContext.broadcast(
+      if (removeDomainSpecificStopWords){
+        (StopWords.loadStopWords ++ StopWords.loadDomainSpecificStopWords).toSet
+      }
+      else {
+        StopWords.loadStopWords.toSet
+      }
+    )
 
     // Create UDF to apply text processing functions to speech column
     val textProcessingPipeline = (input_text: String) => {

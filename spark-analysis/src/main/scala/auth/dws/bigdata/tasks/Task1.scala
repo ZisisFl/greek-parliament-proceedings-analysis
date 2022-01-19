@@ -3,7 +3,7 @@ package auth.dws.bigdata.tasks
 import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame, processSpeechText}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.ml.feature.{CountVectorizer, Tokenizer}
-import org.apache.spark.sql.functions.{column, udf}
+import org.apache.spark.sql.functions.{column, udf, size}
 import org.apache.spark.ml.clustering.LDA
 
 object Task1 {
@@ -18,10 +18,10 @@ object Task1 {
     val start_time = System.nanoTime
 
     // load original csv as DataFrame
-    val original_df = createDataFrame().sample(0.1)
+    val original_df = createDataFrame()//.sample(0.01)
 
     // process speech column
-    val processed_speech_df = processSpeechText(original_df)
+    val processed_speech_df = processSpeechText(original_df, removeDomainSpecificStopWords = true)
 
     // process dataframe
     val processed_df = processDataFrame(processed_speech_df)
@@ -32,12 +32,12 @@ object Task1 {
       .setOutputCol("tokens")
 
     val tokenized_df = tokenizer.transform(processed_df)
-      //.withColumn("tokens_count", size(column("tokens")))
-      //.where(column("tokens_count") > 10)
+      .withColumn("tokens_count", size(column("tokens")))
+      .where(column("tokens_count") > 20)
 
-    tokenized_df.printSchema()
-    tokenized_df.show()
-    println(tokenized_df.count())
+//    tokenized_df.printSchema()
+//    tokenized_df.show()
+//    println(tokenized_df.count())
 
     // create feature vectors with bag of words technique out of speech text
     val vectorizer = new CountVectorizer()
@@ -49,9 +49,10 @@ object Task1 {
 
     val countVectors = vectorizer.transform(tokenized_df).select("id", "features")
 
+    val numTopics = 10
     val lda = new LDA()
-      .setK(5)
-      .setMaxIter(10)
+      .setK(numTopics)
+      .setMaxIter(20)
 
     val model = lda.fit(countVectors)
 
@@ -88,9 +89,14 @@ object Task1 {
       println("\n")
     })
 
-    // Shows the result.
-//    val transformed = model.transform(countVectors)
-//    transformed.show(false)
+    val path_to_results = "src/main/scala/auth/dws/bigdata/results/task1"
+
+    topicsWithTerms
+      .drop("termIndices")
+      .write
+      .format("parquet")
+      .option("header", "true")
+      .save("%s/lda_topics_k_%s.parquet".format(path_to_results, numTopics))
 
 
     val duration = (System.nanoTime - start_time) / 1e9d

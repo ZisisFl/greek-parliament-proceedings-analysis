@@ -4,7 +4,7 @@ import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame, p
 import auth.dws.bigdata.common.{RAKE, RAKEStrategy, StopWords}
 import org.apache.spark.ml.feature.{CountVectorizer, IDF, Tokenizer}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.functions.{collect_list, column, flatten, udf, year}
+import org.apache.spark.sql.functions.{collect_list, column, flatten, second, size, udf, year}
 
 object Task3RAKE {
 
@@ -18,10 +18,10 @@ object Task3RAKE {
     val start_time = System.nanoTime
 
     // load original csv as DataFrame
-    val original_df = createDataFrame().sample(0.01)
+    val original_df = createDataFrame()//.sample(0.01)
 
     // process speech column
-    val processed_speech_df = processSpeechText(original_df)
+    val processed_speech_df = processSpeechText(original_df, removeDomainSpecificStopWords = false)
 
     // process dataframe
     val processed_df = processDataFrame(processed_speech_df)
@@ -52,8 +52,8 @@ object Task3RAKE {
     val idfModel = idf.fit(featurized_df)
 
     val complete_df = idfModel.transform(featurized_df)
-    //.withColumn("tokens_count", size(column("tokens")))
-    //.where(column("tokens_count") > 20)
+    .withColumn("tokens_count", size(column("tokens")))
+    .where(column("tokens_count") > 20)
 
     val rake_algorithm = new RAKE(StopWords.loadStopWords.toSet, Array(' '), Array('.', ',', '\n', ';'))
     val rake = (input_text: String) => {
@@ -69,11 +69,11 @@ object Task3RAKE {
 
     // aggregate topN_keywords into a single Array per year and political party
     val df_per_political_party = speeches_with_rake_df.groupBy("political_party", "sitting_year")
-      .agg(flatten(collect_list("rake_terms")) as "rake_terms_grouped")
+      .agg(flatten(collect_list("rake_terms")) as "rake_keywords_grouped")
 
     // aggregate topN_keywords into a single Array per year and member
     val df_per_member = speeches_with_rake_df.groupBy("member_name_with_party", "sitting_year")
-      .agg(flatten(collect_list("rake_terms")) as "rake_terms_grouped")
+      .agg(flatten(collect_list("rake_terms")) as "rake_keywords_grouped")
 
     val N = 5
     val get_top_rake_keywords = (terms: Seq[Row]) => {
@@ -86,26 +86,36 @@ object Task3RAKE {
         .sortWith(_._2 > _._2)
         .take(N)
         .map(_._1)
-
     }
 
     val get_top_rake_keywords_udf = udf(get_top_rake_keywords)
 
     val df_per_political_party_final = df_per_political_party
-      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_terms_grouped")))
+      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_keywords_grouped")))
 
     val df_per_member_final = df_per_member
-      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_terms_grouped")))
+      .withColumn("topN_keywords_freq", get_top_rake_keywords_udf(column("rake_keywords_grouped")))
 
-    df_per_political_party_final.show(false)
-    df_per_member_final.show(false)
+    // print results
+    //df_per_political_party_final.show(false)
+    //df_per_member_final.show(false)
 
-    //https://towardsdatascience.com/keyword-extraction-methods-the-overview-35557350f8bb
-    //https://nlp.johnsnowlabs.com/api/python/reference/autosummary/sparknlp.annotator.YakeKeywordExtraction.html?highlight=yake
-    //https://www.analyticsvidhya.com/blog/2020/11/words-that-matter-a-simple-guide-to-keyword-extraction-in-python/
-    //https://www.analyticsvidhya.com/blog/2021/10/rapid-keyword-extraction-rake-algorithm-in-natural-language-processing/
-    // KALO PAPER https://sci-hub.se/10.1016/j.ins.2019.09.013
-    // mas endiaferoyn language independent tropoi giati den xreiazetai POS, oi algorithmoi me GRAFOUS THELOUN POS
+    // write results into parquet files
+    val path_to_results = "src/main/scala/auth/dws/bigdata/results/task3"
+
+    df_per_political_party_final
+      .drop("rake_keywords_grouped")
+      .write
+      .format("parquet")
+      .option("header", "true")
+      .save("%s/keywords_political_party_rake.parquet".format(path_to_results))
+
+    df_per_member_final
+      .drop("rake_keywords_grouped")
+      .write
+      .format("parquet")
+      .option("header", "true")
+      .save("%s/keywords_member_rake.parquet".format(path_to_results))
 
     val duration = (System.nanoTime - start_time) / 1e9d
     println(s"Execution time was $duration seconds")

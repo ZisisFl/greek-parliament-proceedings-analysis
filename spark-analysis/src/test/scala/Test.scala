@@ -1,3 +1,4 @@
+import auth.dws.bigdata.common.DataHandler.spark
 import auth.dws.bigdata.common.{DataHandler, StopWords, TextProcessing}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.flatspec.AnyFlatSpec
@@ -19,7 +20,7 @@ class Test extends AnyFlatSpec {
   "dataframe rows" should "be printed" in {
     val df = DataHandler.createDataFrame()
 
-    val test = DataHandler.processSpeechText(df)
+    val test = DataHandler.processSpeechText(df, false)
     test.show()
   }
 
@@ -49,5 +50,18 @@ class Test extends AnyFlatSpec {
     val stopWords = StopWords.loadStopWords.toSet
     println(TextProcessing.textProcessingSingle(text, stopWords))
     println(TextProcessing.textProcessingSingle(text, stopWords).split("\\s").mkString("Array(", ", ", ")"))
+  }
+
+  "test" should "merge 2 arrays into one set" in {
+    val removeDomainSpecificStopWords = false
+    val stopWords = spark.sparkContext.broadcast(
+      if (removeDomainSpecificStopWords){
+        (StopWords.loadStopWords ++ StopWords.loadDomainSpecificStopWords).toSet
+      }
+      else {
+        StopWords.loadStopWords.toSet
+      }
+    )
+    print(stopWords.value.toArray.length)
   }
 }
