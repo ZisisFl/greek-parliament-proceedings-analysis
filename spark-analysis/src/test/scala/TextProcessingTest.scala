@@ -1,10 +1,9 @@
-import auth.dws.bigdata.common.DataHandler.spark
 import auth.dws.bigdata.common.{DataHandler, StopWords, TextProcessing}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class Test extends AnyFlatSpec {
+class TextProcessingTest extends AnyFlatSpec {
   val spark: SparkSession = SparkSession
     .builder()
     .appName("Test")
