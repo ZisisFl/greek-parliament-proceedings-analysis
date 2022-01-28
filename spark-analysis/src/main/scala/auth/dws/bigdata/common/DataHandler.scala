@@ -34,7 +34,7 @@ object DataHandler {
         .toLowerCase()
         .replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
         .split("\\s+")
-        .filter(_.length > 3)
+        .filter(_.length > 2)
         .filter(!stopWords.value.contains(_))
         .mkString(" ")
     }

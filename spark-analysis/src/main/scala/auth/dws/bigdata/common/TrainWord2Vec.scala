@@ -18,12 +18,12 @@ object TrainWord2Vec {
     val removeDomainSpecificStopWords = false
 
     // load original csv as DataFrame
-    val original_df = createDataFrame()//.sample(0.01)
+    val original_df = createDataFrame()
 
     // split speeches in sentences and explode to different row per sentence
     val sentenceSplit = (input_text: String) => {
       input_text
-        .replaceAll("κ. ", " ")
+        .replaceAll(" κ\\. ", " ")
         .split("(?<=.[.;]) +(?=[Α-ΩΆΈΌΊΏΉΎΫΪ́])")
     }
     val sentenceSplitUdf = udf(sentenceSplit)
@@ -47,7 +47,7 @@ object TrainWord2Vec {
         .toLowerCase()
         .replaceAll("[^Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+", " ")
         .split("\\s+")
-        .filter(_.length > 3)
+        .filter(_.length > 2)
         .filter(!stopWords.value.contains(_))
     }
 
