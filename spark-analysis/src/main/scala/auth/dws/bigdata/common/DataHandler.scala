@@ -1,8 +1,7 @@
 package auth.dws.bigdata.common
 
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{column, to_date, udf, concat_ws}
-import org.apache.spark.sql.functions.monotonically_increasing_id
+import org.apache.spark.sql.functions.{column, concat_ws, monotonically_increasing_id, to_date, udf, year}
 
 object DataHandler {
   // fetch existing global spark session
@@ -15,6 +14,7 @@ object DataHandler {
       .option("header", true)
       .csv(path)
       .withColumn("sitting_date", to_date(column("sitting_date"), "dd/MM/yyyy"))
+      .withColumn("sitting_year", year(column("sitting_date")))
   }
 
   def processSpeechText(dataFrame: DataFrame, removeDomainSpecificStopWords: Boolean): DataFrame = {
