@@ -3,8 +3,10 @@ package auth.dws.bigdata.common
 import org.apache.spark.ml.linalg.Vector
 
 object CosineSimilarity {
+
+  def clipValue(inputValue: Double): Double = math.max(0, math.min(1, inputValue))
+
   def module(vec:Vector): Double ={
-    // math.sqrt( vec.map(x=>x*x).sum )
     math.sqrt(vec.toArray.map(math.pow(_,2)).sum)
   }
 
@@ -17,7 +19,7 @@ object CosineSimilarity {
 
   def cosineSimilarity(v1:Vector, v2:Vector):Double ={
     val cos=innerProduct(v1, v2) / (module(v1) * module(v2))
-    if (cos <= 1) cos else 1.0
+    clipValue(cos)
   }
 
   def cosineSimilarityAlt(x: Vector, y: Vector): Double = {
