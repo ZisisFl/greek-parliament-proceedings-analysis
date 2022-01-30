@@ -19,4 +19,13 @@ object CosineSimilarity {
     val cos=innerProduct(v1, v2) / (module(v1) * module(v2))
     if (cos <= 1) cos else 1.0
   }
+
+  def cosineSimilarityAlt(x: Vector, y: Vector): Double = {
+    val v1 = x.toArray
+    val v2 = y.toArray
+    val l1 = scala.math.sqrt(v1.map(x => x*x).sum)
+    val l2 = scala.math.sqrt(v2.map(x => x*x).sum)
+    val scalar = v1.zip(v2).map(p => p._1*p._2).sum
+    scalar/(l1*l2)
+  }
 }
