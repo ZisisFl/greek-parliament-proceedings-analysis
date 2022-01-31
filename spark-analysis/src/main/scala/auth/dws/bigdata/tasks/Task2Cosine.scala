@@ -5,7 +5,7 @@ import org.apache.spark.ml.feature.{HashingTF, IDF, MinHashLSH, Tokenizer}
 import org.apache.spark.ml.linalg.SparseVector
 import org.apache.spark.mllib.linalg.distributed.{MatrixEntry, RowMatrix}
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{column, size, udf, year}
+import org.apache.spark.sql.functions.{col, column, size, udf, year}
 
 object Task2Cosine {
   def main(args: Array[String]): Unit = {
@@ -48,7 +48,7 @@ object Task2Cosine {
       .withColumn("tokens_count", size(column("tokens")))
       .where(column("tokens_count") > 10)
 
-//    complete_df.show(20, truncate = false)
+    //    complete_df.show(20, truncate = false)
 
     // Cosine similarity
     val asDense = (v: SparseVector) => v.toDense //transform to dense matrix
@@ -57,7 +57,7 @@ object Task2Cosine {
     // Transformation to dense features. Most probably has worse performanse
     val dense_df = complete_df
       .select("id", "tfidf")
-//      .withColumn("dense_features", asDenseUdf(column("tfidf")))
+    //      .withColumn("dense_features", asDenseUdf(column("tfidf")))
 
     val dense_rows = dense_df.select("tfidf").rdd
       .map(_.getAs[org.apache.spark.ml.linalg.Vector](0))
@@ -73,7 +73,10 @@ object Task2Cosine {
     val transformedRDD = simsEstimate.entries.map { case MatrixEntry(row: Long, col: Long, sim: Double) => (row, col, sim) }
     val similarities_df = sqlContext.createDataFrame(transformedRDD).toDF("id_A", "id_B", "sim")
 
-    similarities_df.show()
+    val sorted_df = similarities_df
+      .sort(col("sim").desc)
+
+    sorted_df.show()
 
     val duration = (System.nanoTime - start_time) / 1e9d
     println(s"Execution time was $duration seconds")

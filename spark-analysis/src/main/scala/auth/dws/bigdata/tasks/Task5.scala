@@ -22,7 +22,8 @@ object Task5 {
       return
     }
 
-    val clustering_algorithm = args(0)
+//    val clustering_algorithm = args(0)
+    val clustering_algorithm = "bkm"
 
     val original_df = createDataFrame().sample(0.01)
 
@@ -48,7 +49,7 @@ object Task5 {
 
     val complete_df = full_featurized_df
           .withColumn("tokens_count", size(column("tokens")))
-          .where(column("tokens_count") > 20)
+          .where(column("tokens_count") > 10)
 
 
     // Using CountVectorizer

@@ -3,7 +3,7 @@ package auth.dws.bigdata.tasks
 import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame, processSpeechText}
 import org.apache.spark.ml.feature.{HashingTF, IDF, MinHashLSH, Tokenizer}
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{col, column, size, udf, year}
+import org.apache.spark.sql.functions.{col, collect_list, column, flatten, size, udf, year}
 
 object Task2Jaccard {
   def main(args: Array[String]): Unit = {
@@ -18,7 +18,9 @@ object Task2Jaccard {
 
     val start_time = System.nanoTime
 
-    val original_df = createDataFrame().sample(0.01)
+    val initial_df = createDataFrame()
+    val temp_df = initial_df.filter(col("sitting_year") > 2000)
+    val original_df = temp_df.sample(0.20, seed = 42)
 
     val processed_speech_df = processSpeechText(original_df, removeDomainSpecificStopWords = false)
 
@@ -33,20 +35,26 @@ object Task2Jaccard {
     val processed_df_w_year = tokenized_df.withColumn("sitting_year", year(column("sitting_date")))
       .filter(column("sitting_year").isNotNull)
 
+    val df_per_political_party = processed_df_w_year.groupBy("political_party", "sitting_year")
+      .agg(flatten(collect_list("tokens")) as "tokens_grouped")
+
+//    val df_per_member = processed_df_w_year.groupBy("member_name_with_party", "sitting_year")
+//      .agg(flatten(collect_list("tokens")) as "tokens_grouped")
+
     // Using HashingTF
     val hashingtf = new HashingTF()
-      .setInputCol("tokens")
+      .setInputCol("tokens_grouped")
       .setOutputCol("tf")
       .setNumFeatures(10000)
 
-    val featurized_df = hashingtf.transform(processed_df_w_year)
+    val featurized_df = hashingtf.transform(df_per_political_party)
 
     val idf = new IDF().setInputCol("tf")
       .setOutputCol("tfidf")
     val idfModel = idf.fit(featurized_df)
 
     val complete_df = idfModel.transform(featurized_df)
-      .withColumn("tokens_count", size(column("tokens")))
+      .withColumn("tokens_count", size(column("tokens_grouped")))
       .where(column("tokens_count") > 10)
 
 
@@ -59,41 +67,74 @@ object Task2Jaccard {
 
     val approxSimilarityJoin = mh_model.approxSimilarityJoin(complete_df, complete_df, 0.9, "JaccardDistance")
 
+//    approxSimilarityJoin.show()
+//    approxSimilarityJoin.printSchema()
+
     val similarity_df = approxSimilarityJoin.toDF()
-      .filter(col("JaccardDistance") > 0.5)
+      .filter(col("JaccardDistance") > 0.1)
+      .filter(col("JaccardDistance") < 0.9)
       .select(
         col("JaccardDistance"),
-        col("datasetA.id").as("id_a"),
-        col("datasetA.member_name_with_party").as("member_name_a"),
+        col("datasetA.political_party").as("political_party_a"),
         col("datasetA.sitting_year").as("sitting_year_a"),
-        col("datasetB.id").as("id_b"),
-        col("datasetB.member_name_with_party").as("member_name_b"),
+        col("datasetB.political_party").as("political_party_b"),
         col("datasetB.sitting_year").as("sitting_year_b")
       )
 
-    val join_func = (x: String, y: String) => {
-      Set(x, y)
+    //    val similarity_df = approxSimilarityJoin.toDF()
+    //      .filter(col("JaccardDistance") > 0.1)
+    //      .filter(col("JaccardDistance") < 0.9)
+    //      .select(
+    //        col("JaccardDistance"),
+    //        col("datasetA.member_name_with_party").as("member_name_with_party_a"),
+    //        col("datasetA.sitting_year").as("sitting_year_a"),
+    //        col("datasetB.member_name_with_party").as("member_name_with_party_b"),
+    //        col("datasetB.sitting_year").as("sitting_year_b")
+    //      )
+
+    //    val similarity_df = approxSimilarityJoin.toDF()
+    //      .filter(col("JaccardDistance") > 0.5)
+    //      .select(
+    //        col("JaccardDistance"),
+    //        col("datasetA.id").as("id_a"),
+    //        col("datasetA.member_name_with_party").as("member_name_a"),
+    //        col("datasetA.sitting_year").as("sitting_year_a"),
+    //        col("datasetB.id").as("id_b"),
+    //        col("datasetB.member_name_with_party").as("member_name_b"),
+    //        col("datasetB.sitting_year").as("sitting_year_b")
+    //      )
+
+    // Unique Pairs
+
+    val uniquePair = (x: String, y: String, k: String, l: String) => {
+      Array(x, y, k, l).sorted
     }
+    val uniquePairUdf = udf(uniquePair)
 
-    val join_funcUDF = udf(join_func)
+    val unique_sim_df = similarity_df
+      .withColumn("speakers_pair",
+        uniquePairUdf(
+          col("political_party_a"), col("sitting_year_a"),
+          col("political_party_b"), col("sitting_year_b")
+        ))
 
-    val temp = similarity_df
-      .withColumn(
-        "speakers_pair",
-        join_funcUDF(col("member_name_a"), col("member_name_b"))
-      )
+    //    val unique_sim_df = similarity_df
+    //      .withColumn("speakers_pair", uniquePairUdf(col("id_a"), col("id_b")))
 
+    val sorted_similarities_df = unique_sim_df
+      .dropDuplicates("speakers_pair")
+      .sort(col("JaccardDistance").asc)
 
-    val sorted_similarities_df = temp
-      .select(
-        col("speakers_pair"),
-        col("JaccardDistance")
-      )
-      .distinct()
-      .sort(col("JaccardDistance").desc)
+    sorted_similarities_df.show(numRows=50, truncate=false)
 
-    sorted_similarities_df.distinct().show(false)
-    sorted_similarities_df.printSchema()
+    // write results into parquet files
+    val path_to_results = "src/main/scala/auth/dws/bigdata/results/task2"
+
+    sorted_similarities_df
+      .write
+      .format("parquet")
+      .option("header", "true")
+      .save(s"$path_to_results/jaccard_party.parquet")
 
     val duration = (System.nanoTime - start_time) / 1e9d
     println(s"Execution time was $duration seconds")
