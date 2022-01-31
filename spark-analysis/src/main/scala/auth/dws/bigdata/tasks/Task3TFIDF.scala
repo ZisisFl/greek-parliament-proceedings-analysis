@@ -34,7 +34,8 @@ object Task3TFIDF {
     val tokenized_df = tokenizer.transform(processed_df)
 
     // extract year from sitting_date field, drop nulls
-    val processed_df_w_year = tokenized_df.withColumn("sitting_year", year(column("sitting_date")))
+    val processed_df_w_year = tokenized_df
+      .withColumn("sitting_year", year(column("sitting_date")))
       .filter(column("sitting_year").isNotNull)
 
     // calculate tfidf for every speech
@@ -47,13 +48,15 @@ object Task3TFIDF {
 
     val featurized_df = vectorizer.transform(processed_df_w_year)
 
-    val idf = new IDF().setInputCol("tf")
+    val idf = new IDF()
+      .setInputCol("tf")
       .setOutputCol("tfidf")
     val idfModel = idf.fit(featurized_df)
 
-    val complete_df = idfModel.transform(featurized_df)
-    .withColumn("tokens_count", size(column("tokens")))
-    .where(column("tokens_count") > 20)
+    val complete_df = idfModel
+      .transform(featurized_df)
+      .withColumn("tokens_count", size(column("tokens")))
+      .where(column("tokens_count") > 10)
 
     // extract top-N keywords based on tfidf score from each speech token
     val vocabList = vectorizer.vocabulary
@@ -74,7 +77,9 @@ object Task3TFIDF {
     val get_top_keywords_udf = udf(get_top_keywords)
 
     // add mapped terms in dataframe
-    val df_with_top_keywords = complete_df.withColumn("topN_keywords", get_top_keywords_udf(column("tfidf")))
+    val df_with_top_keywords = complete_df
+      .withColumn("topN_keywords", get_top_keywords_udf(column("tfidf")))
+      .cache()
 
     // aggregate topN_keywords into a single Array per year and political party
     val df_per_political_party = df_with_top_keywords.groupBy("political_party", "sitting_year")

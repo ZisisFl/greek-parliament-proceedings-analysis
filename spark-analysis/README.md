@@ -3,4 +3,6 @@ naming it ```gpp.csv```
 
 
 ## Graphframes
-Instructions to install graphframes can be found [here](https://spark-packages.org/package/graphframes/graphframes).
+This project makes use of [graphframes](https://graphframes.github.io/graphframes/docs/_site/index.html) package. 
+In this project all the dependencies are resolved with the use of build.sbt. Additional instructions to install 
+graphframes can be found [here](https://spark-packages.org/package/graphframes/graphframes).
