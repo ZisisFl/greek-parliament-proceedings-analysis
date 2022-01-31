@@ -79,7 +79,6 @@ object Task3TFIDF {
     // add mapped terms in dataframe
     val df_with_top_keywords = complete_df
       .withColumn("topN_keywords", get_top_keywords_udf(column("tfidf")))
-      .cache()
 
     // aggregate topN_keywords into a single Array per year and political party
     val df_per_political_party = df_with_top_keywords.groupBy("political_party", "sitting_year")

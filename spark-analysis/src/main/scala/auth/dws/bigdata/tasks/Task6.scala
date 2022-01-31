@@ -22,15 +22,16 @@ object Task6 {
 
     val removeDomainSpecificStopWords = false
 
+    val date_to_summarize = "2019-01-25" // ψηφοφορια συμφωνιας των πρεσπων
+    //val date_to_summarize = "2014-03-31" // μομφη 2014
+    //val date_to_summarize = "2018-07-23" // ματι 2018
+
     // load original csv as DataFrame
     val original_df = createDataFrame()
-      .filter(column("sitting_date")===lit("2019-11-18"))
-      //.filter(column("sitting_year")===2020)
-      //.filter(column("political_party")==="νεα δημοκρατια")
+      .filter(column("sitting_date")===lit(date_to_summarize))
       // .filter(column("parliamentary_period") === "period 5")
       //.filter(column("parliamentary_session") === "session 1")
       //.filter(column("parliamentary_sitting") === "sitting 5")
-      //.sample(0.01)
 
 
     // split speeches in sentences and explode to different row per sentence
@@ -98,8 +99,6 @@ object Task6 {
         column("parliamentary_sitting")
       )
 
-    println(vertices_df.count())
-
     val cosineSimUdf = udf(cosineSim)
 
     val edges_df = transformed_sentence_df.select(column("id").as("src"),
@@ -144,23 +143,16 @@ object Task6 {
       .maxIter(20)
       .run()
 
-    results.vertices.sort(column("pagerank").desc).show(false)
-    //results.vertices.take(200).foreach(println)
-    //results.edges.take(200).foreach(println)
-    //results.vertices.printSchema()
+    val path_to_results = "src/main/scala/auth/dws/bigdata/results/task6"
 
-//    vertex_df
-//      .write
-//      .format("parquet")
-//      .option("header", "true")
-//      .save("src/main/scala/auth/dws/bigdata/results/vertexlist.parquet")
-//
-//    edge_df
-//      .select("src","dst", "weight")
-//      .write
-//      .format("parquet")
-//      .option("header", "true")
-//      .save("src/main/scala/auth/dws/bigdata/results/edgelist.parquet")
+    results
+      .vertices
+      .sort(column("pagerank").desc)
+      //.show(false)
+      .write
+      .format("parquet")
+      .option("header", "true")
+      .save("%s/summary_of_%s.parquet".format(path_to_results, date_to_summarize))
 
 
     val duration = (System.nanoTime - start_time) / 1e9d
