@@ -3,7 +3,7 @@ package auth.dws.bigdata.tasks
 import auth.dws.bigdata.common.DataHandler.{createDataFrame, processDataFrame}
 import auth.dws.bigdata.common.{RAKE, RAKEStrategy, StopWords}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.functions.{collect_list, column, flatten, udf}
+import org.apache.spark.sql.functions.{collect_list, column, flatten, udf, regexp_replace}
 
 object Task3RAKE {
 
@@ -23,6 +23,9 @@ object Task3RAKE {
 
     // process dataframe
     val processed_df = processDataFrame(original_df)
+      .withColumn("speech", regexp_replace(column("speech"), " κ\\.", " "))
+
+    processed_df.show()
 
     // Create udf to identify rows that speech text consists of votes counts
     val nameWithVoteRegex = spark.sparkContext.broadcast("[Α-ΩΆΈΌΊΏΉΎΫΪ́α-ωάέόίώήύϊΐϋΰ]+\\s*[+-]".r)

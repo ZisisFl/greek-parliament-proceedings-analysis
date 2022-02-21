@@ -93,7 +93,6 @@ object Task4TFIDF {
     // add mapped terms in dataframe
     val df_with_top_keywords = complete_df
       .withColumn("topN_keywords", get_top_keywords_udf(column("tfidf")))
-      .cache()
 
     // add periods of interest -- 5 years prior to the financial crisis and 5 years after
     val df_per_period = df_with_top_keywords
